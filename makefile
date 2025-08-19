@@ -6,7 +6,7 @@ endif
 
 # Defaults (used only if not defined in .env)
 # .env > these defaults
-MODEL ?= llama3:8b
+MODEL ?= llama3.2:3b
 OLLAMA_HOST ?= http://localhost:11434
 
 .DEFAULT_GOAL := help
