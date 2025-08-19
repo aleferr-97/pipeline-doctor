@@ -10,7 +10,7 @@ Create a `.env` file in the project root to configure environment variables requ
 Example `.env` file:
 ```
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3:8b
+OLLAMA_MODEL=llama3.2:3b
 ```
 
 ## Models

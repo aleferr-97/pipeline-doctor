@@ -23,7 +23,7 @@ def main():
     args = p.parse_args()
 
     host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    model = os.getenv("OLLAMA_MODEL", "llama3:8b")
+    model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
     _assert_ollama_up(host)
 
     res = analyze_eventlog_with_agent(
