@@ -1,5 +1,8 @@
 import json
+import argparse
+import pprint
 from typing import List, Dict, Any
+
 
 def _percentile(values: List[float], pct: float) -> float:
     if not values:
@@ -12,7 +15,10 @@ def _percentile(values: List[float], pct: float) -> float:
         return float(values[f])
     return float(values[f] * (c - k) + values[c] * (k - f))
 
-def summarize_metrics(eventlog_path: str, skew_threshold: float = 3.0, small_file_threshold_mb: float = 32.0) -> Dict[str, Any]:
+
+def summarize_metrics(
+    eventlog_path: str, skew_threshold: float = 3.0, small_file_threshold_mb: float = 32.0
+) -> Dict[str, Any]:
     """
     Legge un JSONL 'semplificato' con record tipo:
       {"type":"task","duration_ms":1234,"shuffleRead_mb":12.3,"stage_id":1}
@@ -54,8 +60,10 @@ def summarize_metrics(eventlog_path: str, skew_threshold: float = 3.0, small_fil
     total_shuffle_read_mb = sum(shuffle_reads_mb)
     avg_file_mb = (sum(file_sizes_mb) / len(file_sizes_mb)) if file_sizes_mb else 0.0
     avg_files_per_partition = (
-        sum(files_per_partition.values()) / len(files_per_partition)
-    ) if files_per_partition else 0.0
+        (sum(files_per_partition.values()) / len(files_per_partition))
+        if files_per_partition
+        else 0.0
+    )
 
     # Heuristic: suspect skew if p95/median ratio exceeds skew_threshold.
     # Reference: p95/median > 3 is a common empirical threshold seen in Spark AQE/skew join discussions
@@ -79,20 +87,16 @@ def summarize_metrics(eventlog_path: str, skew_threshold: float = 3.0, small_fil
         "is_small_files_problem": is_small_files_problem,
     }
 
+
 if __name__ == "__main__":
-    import argparse, pprint
 
     parser = argparse.ArgumentParser(description="Summarize MiniSpark JSONL log")
     parser.add_argument("eventlog", help="Path al JSONL event log")
-    parser.add_argument("--skew-th", type=float, default=3.0,
-                        help="Soglia skew ratio (p95/median)")
-    parser.add_argument("--small-file-mb", type=float, default=32.0,
-                        help="Soglia small files (MB)")
+    parser.add_argument("--skew-th", type=float, default=3.0, help="Soglia skew ratio (p95/median)")
+    parser.add_argument("--small-file-mb", type=float, default=32.0, help="Soglia small files (MB)")
     args = parser.parse_args()
 
     metrics = summarize_metrics(
-        args.eventlog,
-        skew_threshold=args.skew_th,
-        small_file_threshold_mb=args.small_file_mb
+        args.eventlog, skew_threshold=args.skew_th, small_file_threshold_mb=args.small_file_mb
     )
     pprint.pp(metrics)
