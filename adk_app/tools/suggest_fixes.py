@@ -67,11 +67,12 @@ def suggest_fixes(
     # 4) Too many files per partition
     if m.get("avg_files_per_partition", 0) > files_per_partition_threshold:
         add(
-            "medium", "Troppi file per partizione",
-            f"Media file/partizione = {m['avg_files_per_partition']} > soglia {files_per_partition_threshold}.",
+            "medium", 
+            "Too many files per partition",
+            f"Average files/partition = {m['avg_files_per_partition']} > threshold {files_per_partition_threshold}.",
             [
-                "Riduci parallelism in write o abilita AQE partition coalescing",
-                "Rivedi la strategia di partizionamento (evita over‑partitioning)",
+                "Reduce parallelism in write or enable AQE partition coalescing",
+                "Review partitioning strategy (avoid over-partitioning)",
             ],
         )
 
