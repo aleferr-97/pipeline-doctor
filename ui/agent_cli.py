@@ -1,6 +1,6 @@
 import argparse
 from adk_app.agent import analyze_eventlog_with_agent
-from adk_app.llm.base import NoopLLM
+from adk_app.llm.ollama import OllamaLLM
 
 def main():
     p = argparse.ArgumentParser(description="Pipeline Doctor — Agent CLI")
@@ -13,7 +13,7 @@ def main():
 
     res = analyze_eventlog_with_agent(
         args.eventlog,
-        llm=NoopLLM(),  # qui poi: OllamaLLM() o VertexLLM()
+        llm=OllamaLLM(model="llama3:8b"),
         skew_threshold=args.skew_th,
         small_file_mb=args.small_file_mb,
         shuffle_heavy_mb=args.shuffle_heavy_mb,
