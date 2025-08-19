@@ -9,17 +9,24 @@ REPORT_SYSTEM = (
 )
 
 def _build_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict) -> str:
+    # Separate rule-based issues from their action templates so we can
+    # hide actions in the CLI output while still providing them to the LLM
+    # as grounding/reference (helps reduce hallucinations and keeps best practices).
+    ref_actions = {r["issue"]: r.get("actions", []) for r in recs if r.get("actions")}
+    issues_only = [{k: v for k, v in r.items() if k != "actions"} for r in recs]
     return f"""
 Context:
 - Metrics: {metrics}
 - Heuristic thresholds (current): {thresholds}
-- Draft recommendations (rule-based): {recs}
+- Draft issues (rule-based, without actions): {issues_only}
+- Reference actions (optional; prefer these over inventing risky steps): {ref_actions}
 
 Tasks:
 1) Produce a prioritized, succinct action plan (bullet points).
-2) For each recommendation, explain WHY (based on the metrics) and add concrete HOW-TO (Spark conf/SQL).
-3) Propose BETTER threshold values for this job (skew_threshold, small_file_mb, shuffle_heavy_mb, files_per_partition_threshold).
-4) Suggest one safe experiment to validate improvements in the next run.
+2) For each issue, explain WHY (grounded in the metrics) and add concrete HOW-TO (Spark conf/SQL).
+3) Prefer the provided reference actions when relevant; do not propose risky or unsupported steps.
+4) Propose BETTER threshold values for this job (skew_threshold, small_file_mb, shuffle_heavy_mb, files_per_partition_threshold).
+5) Suggest one safe experiment to validate improvements in the next run.
 
 Output: keep it short and structured.
 """
