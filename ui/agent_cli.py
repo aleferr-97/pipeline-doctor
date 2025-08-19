@@ -1,6 +1,17 @@
 import argparse
 from adk_app.agent import analyze_eventlog_with_agent
 from adk_app.llm.ollama import OllamaLLM
+import os
+import sys
+import requests
+
+def _assert_ollama_up(host: str):
+    try:
+        r = requests.get(f"{host.rstrip('/')}/api/tags", timeout=3)
+        r.raise_for_status()
+    except Exception as e:
+        sys.exit(f"Ollama not reachable at {host}. Start it with `make up && make wait-ollama` and ensure a model is pulled.")
+
 
 def main():
     p = argparse.ArgumentParser(description="Pipeline Doctor — Agent CLI")
@@ -11,9 +22,13 @@ def main():
     p.add_argument("--files-per-part-th", type=float, default=2.0)
     args = p.parse_args()
 
+    host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    model = os.getenv("OLLAMA_MODEL", "llama3:8b")
+    _assert_ollama_up(host)
+
     res = analyze_eventlog_with_agent(
         args.eventlog,
-        llm=OllamaLLM(model="llama3:8b"),
+        llm=OllamaLLM(model=model, host=host),
         skew_threshold=args.skew_th,
         small_file_mb=args.small_file_mb,
         shuffle_heavy_mb=args.shuffle_heavy_mb,
@@ -23,11 +38,9 @@ def main():
     print("\n=== METRICS ===")
     for k, v in res["metrics"].items():
         print(f"{k}: {v}")
-    print("\n=== RULE-BASED RECS ===")
-    for i, r in enumerate(res["recommendations"], 1):
-        print(f"{i}. [{r['impact']}] {r['issue']} — {r['why']}")
-        for a in r["actions"]:
-            print(f"   - {a}")
+    print("\n=== RULE-BASED ISSUES ===")
+    for r in res["recommendations"]:
+        print(f"- [{r['impact']}] {r['issue']} — {r['why']}")
     print("\n=== AGENT REPORT ===")
     print(res["report"])
 

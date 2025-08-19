@@ -22,7 +22,7 @@ class OllamaLLM(LLM):
             "stream": False,
         }
         url = f"{self.host}/api/generate"
-        r = requests.post(url, json=payload, headers=headers, timeout=60)
+        r = requests.post(url, json=payload, headers=headers)
         r.raise_for_status()
         data = r.json()
         return data.get("response", "").strip()
