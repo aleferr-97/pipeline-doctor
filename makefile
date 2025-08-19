@@ -6,13 +6,13 @@ endif
 
 # Defaults (used only if not defined in .env)
 # .env > these defaults
-MODEL ?= llama3.2:3b
+OLLAMA_MODEL ?= llama3.2:3b
 OLLAMA_HOST ?= http://localhost:11434
 
 .DEFAULT_GOAL := help
 
 .PHONY: install test fmt lint typecheck clean help
-.PHONY: up down pull-model wait-ollama
+.PHONY: up down pull-model wait-ollama agent-sample
 
 # --- Dockerized Ollama (for local LLM) ---
 up:
@@ -25,7 +25,7 @@ down:
 
 pull-model:
 	# Pull an Ollama model
-	curl -fsS -X POST $(OLLAMA_HOST)/api/pull -d '{"name":"$(MODEL)"}' -H "Content-Type: application/json"
+	curl -fsS -X POST $(OLLAMA_HOST)/api/pull -d '{"name":"$(OLLAMA_MODEL)"}' -H "Content-Type: application/json"
 
 wait-ollama:
 	@echo "Waiting for Ollama at $(OLLAMA_HOST)..."
@@ -51,7 +51,8 @@ lint:
 typecheck:
 	mypy adk_app
 
-run-agent:
+agent-sample: up wait-ollama pull-model
+	@echo "Running agent with OLLAMA_HOST=$(OLLAMA_HOST) OLLAMA_MODEL=$(OLLAMA_MODEL)"
 	python ui/agent_cli.py --eventlog data/samples/spark_eventlog.jsonl
 
 clean:
@@ -62,13 +63,13 @@ help:
 	@echo "Available commands:"
 	@echo "  make up            - Start Ollama (Docker)"
 	@echo "  make wait-ollama   - Wait until Ollama API is ready"
-	@echo "  make pull-model    - Pull Ollama model (MODEL=$(MODEL))"
+	@echo "  make pull-model    - Pull Ollama model (OLLAMA_MODEL=$(OLLAMA_MODEL))"
+	@echo "  make agent-sample  - Start stack, pull model, and run CLI on the sample eventlog"
 	@echo "  make down          - Stop Docker stack"
 	@echo "  make install       - Install the package in editable mode"
 	@echo "  make test          - Run tests"
 	@echo "  make fmt           - Format code with Black"
 	@echo "  make lint          - Lint with Ruff"
 	@echo "  make typecheck     - Type-check with mypy"
-	@echo "  make run-agent     - Run the agent CLI with sample input"
 	@echo "  make clean         - Clean caches and build artifacts"
 	@echo "  make help          - Show this help"
