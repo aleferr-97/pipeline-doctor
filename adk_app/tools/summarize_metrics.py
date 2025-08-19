@@ -20,10 +20,10 @@ def summarize_metrics(
     eventlog_path: str, skew_threshold: float = 3.0, small_file_threshold_mb: float = 32.0
 ) -> Dict[str, Any]:
     """
-    Legge un JSONL 'semplificato' con record tipo:
+    Reads a simplified JSONL log with records such as:
       {"type":"task","duration_ms":1234,"shuffleRead_mb":12.3,"stage_id":1}
       {"type":"output_file","partition_id":0,"size_mb":5.7}
-    Restituisce metriche base utili per le diagnosi.
+    Returns basic metrics useful for diagnosis.
 
     Thresholds for heuristics are configurable:
     - skew_threshold: ratio of p95 to median task duration above which skew is suspected.
@@ -91,9 +91,9 @@ def summarize_metrics(
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Summarize MiniSpark JSONL log")
-    parser.add_argument("eventlog", help="Path al JSONL event log")
-    parser.add_argument("--skew-th", type=float, default=3.0, help="Soglia skew ratio (p95/median)")
-    parser.add_argument("--small-file-mb", type=float, default=32.0, help="Soglia small files (MB)")
+    parser.add_argument("eventlog", help="Path to the JSONL event log")
+    parser.add_argument("--skew-th", type=float, default=3.0, help="Skew ratio threshold (p95/median)")
+    parser.add_argument("--small-file-mb", type=float, default=32.0, help="Small files threshold (MB)")
     args = parser.parse_args()
 
     metrics = summarize_metrics(
