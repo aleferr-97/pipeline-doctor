@@ -1,0 +1,6 @@
+{"type":"task","duration_ms":1200,"shuffleRead_mb":10.1,"stage_id":1}
+{"type":"task","duration_ms":1100,"shuffleRead_mb":9.8,"stage_id":1}
+{"type":"task","duration_ms":15000,"shuffleRead_mb":80.0,"stage_id":2}
+{"type":"output_file","partition_id":0,"size_mb":6.2}
+{"type":"output_file","partition_id":0,"size_mb":7.1}
+{"type":"output_file","partition_id":1,"size_mb":5.5}
