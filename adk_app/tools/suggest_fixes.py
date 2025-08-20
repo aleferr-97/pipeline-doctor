@@ -30,12 +30,12 @@ def suggest_fixes(
     if m.get("skew_ratio", 0) > skew_threshold:
         add(
             "high", "Data skew",
-            f"Skew ratio {m['skew_ratio']} > soglia {skew_threshold}.",
+            f"Skew ratio {m['skew_ratio']} > threshold {skew_threshold}.",
             [
-                "Abilita AQE: spark.sql.adaptive.enabled=true",
-                "Abilita skew join: spark.sql.adaptive.skewJoin.enabled=true",
-                "Salting/repartition sulla key sbilanciata",
-                "Valuta broadcast join se un lato è piccolo (≈<= 512MB)",
+                "Enable AQE: spark.sql.adaptive.enabled=true",
+                "Enable skew join: spark.sql.adaptive.skewJoin.enabled=true",
+                "Salting/repartition on the uneven key",
+                "Evaluate broadcast join if one side is small (≈<= 512MB)",
             ],
         )
 
@@ -43,7 +43,7 @@ def suggest_fixes(
     if m.get("shuffle_read_mb", 0) > shuffle_heavy_mb:
         add(
             "medium", "Heavy shuffle",
-            f"Shuffle totale {m['shuffle_read_mb']} MB > soglia {shuffle_heavy_mb} MB.",
+            f"Total shuffle {m['shuffle_read_mb']} MB > threshold {shuffle_heavy_mb} MB.",
             [
                 "Rivedi strategie di join; riduci stage con shuffle",
                 "Imposta spark.sql.autoBroadcastJoinThreshold in modo adeguato",
@@ -56,11 +56,11 @@ def suggest_fixes(
     if 0 < avg_file < small_file_mb:
         add(
             "high", "Small files",
-            f"File medi {avg_file} MB < soglia {small_file_mb} MB.",
+            f"Avg file size {avg_file} MB < threshold {small_file_mb} MB.",
             [
-                "Compaction (Delta OPTIMIZE / coalesce prima della write)",
-                "Tuning partitioning per target 32-128MB/file",
-                "Compaction periodica sulle tabelle hot",
+                "Compaction (Delta OPTIMIZE / coalesce before writing)",
+                "Tuning partitioning - target 32-128MB/file",
+                "Compaction on hot tables",
             ],
         )
 

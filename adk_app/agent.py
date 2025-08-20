@@ -1,28 +1,26 @@
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Any, Tuple
+import json
+import logging
+
 from adk_app.tools.summarize_metrics import summarize_metrics
 from adk_app.tools.suggest_fixes import suggest_fixes
 from adk_app.llm.base import LLM, NoopLLM
-
-REPORT_SYSTEM = (
-    "You are a senior data engineering assistant specialized in Spark tuning. "
-    "Be concise, actionable, and justify each recommendation with the provided metrics."
+from adk_app.prompts import (
+    DRAFT_SYSTEM,
+    REFINE_SYSTEM,
+    build_draft_prompt,
+    build_refine_prompt,
+)
+from adk_app.helpers import (
+    format_report_from_agent_json,
+    try_load_json,
+    clean_threshold_updates,
+    llm_to_json
 )
 
-def _build_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict) -> str:
-    return f"""
-Context:
-- Metrics: {metrics}
-- Heuristic thresholds (current): {thresholds}
-- Draft recommendations (rule-based): {recs}
+logger = logging.getLogger(__name__)
 
-Tasks:
-1) Produce a prioritized, succinct action plan (bullet points).
-2) For each recommendation, explain WHY (based on the metrics) and add concrete HOW-TO (Spark conf/SQL).
-3) Propose BETTER threshold values for this job (skew_threshold, small_file_mb, shuffle_heavy_mb, files_per_partition_threshold).
-4) Suggest one safe experiment to validate improvements in the next run.
-
-Output: keep it short and structured.
-"""
+# ---- Public API --------------------------------------------------------------
 
 def analyze_eventlog_with_agent(
     eventlog_path: str,
@@ -33,8 +31,11 @@ def analyze_eventlog_with_agent(
     shuffle_heavy_mb: float = 2048.0,
     files_per_partition_threshold: float = 2.0,
 ) -> Dict:
+    """Analyze an eventlog with heuristics + LLM (draft→refine)."""
     # 1) Perceive
     metrics = summarize_metrics(eventlog_path)
+    logger.debug(f"Summarized metrics: {metrics}")
+
     # 2) Draft with tools
     recs = suggest_fixes(
         metrics,
@@ -43,7 +44,9 @@ def analyze_eventlog_with_agent(
         shuffle_heavy_mb=shuffle_heavy_mb,
         files_per_partition_threshold=files_per_partition_threshold,
     )
-    # 3) Reason with LLM
+    logger.debug(f"Generated recommendations: {recs}")
+
+    # 3) Reason (LLM)
     llm = llm or NoopLLM()
     thresholds = {
         "skew_threshold": skew_threshold,
@@ -51,7 +54,34 @@ def analyze_eventlog_with_agent(
         "shuffle_heavy_mb": shuffle_heavy_mb,
         "files_per_partition_threshold": files_per_partition_threshold,
     }
-    prompt = _build_prompt(metrics, recs, thresholds)
-    report = llm.generate(prompt, system=REPORT_SYSTEM)
 
-    return {"metrics": metrics, "recommendations": recs, "report": report}
+    # Draft
+    draft_prompt = build_draft_prompt(metrics, recs, thresholds)
+    draft_obj, draft_raw = llm_to_json(llm, DRAFT_SYSTEM, draft_prompt)
+    logger.debug(f"Draft parsed: {draft_obj is not None}")
+
+    if not draft_obj:
+        # No valid JSON → return textual draft
+        logger.info("Draft JSON parse failed; returning textual draft.")
+        return {
+            "metrics": metrics,
+            "recommendations": recs,
+            "report": draft_raw,
+            "agent": None,
+        }
+
+    # Refine
+    refine_prompt = build_refine_prompt(metrics, recs, thresholds, draft_obj)
+    refined_obj, refined_raw = llm_to_json(llm, REFINE_SYSTEM, refine_prompt)
+    logger.debug(f"Refined parsed: {refined_obj is not None}")
+
+    agent_structured = refined_obj or draft_obj
+    clean_threshold_updates(agent_structured)
+    formatted_report = format_report_from_agent_json(agent_structured)
+
+    return {
+        "metrics": metrics,
+        "recommendations": recs,
+        "report": formatted_report,
+        "agent": agent_structured,
+    }

@@ -3,10 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Virtual env
+# env
 .venv/
 env/
 venv/
+.env
 
 # Build & packaging
 *.egg-info/
@@ -27,3 +28,6 @@ htmlcov/
 .idea/
 *.swp
 .DS_Store
+
+# Evals
+eval/runs/
