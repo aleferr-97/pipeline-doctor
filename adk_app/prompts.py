@@ -35,7 +35,10 @@ Additional rules:
 - Do not include threshold_updates entries where new == old.
 - Rationale must be non-empty; if no change, omit the key.
 - Each how must be a concrete Spark/Delta conf or operation (e.g., exact spark.sql.* key or Delta command).
-- expected_gain must be measurable (e.g., "-20–30% p95 task ms", "small files < N").
+- expected_gain must be measurable and use concrete numeric targets derived from metrics/thresholds (e.g., "-20–30% p95 task ms", "avg file ≥ {thresholds.get('small_file_mb')} MB"). Never output placeholders like N, "<value>", or examples verbatim.
+- risk_flags must contain potential side effects or risks of the suggested actions (e.g., "Broadcast join may cause OOM", "Compaction may increase temporary storage").
+- If no risks are identified, output a list with something says that there are no risk if you take the suggested actions.
+- Limit to at most 1 action per issue present in heuristic_issues; do not invent actions for issues that are not listed.
 
 Return STRICT JSON that matches this schema exactly:
 {{
@@ -59,6 +62,7 @@ Return STRICT JSON that matches this schema exactly:
 Do not add any extra keys. Output JSON only.
 """
 
+
 def build_refine_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, draft: Dict) -> str:
     return f"""
 You are refining an assistant's draft JSON. Make it concise, valid to the schema, with at most 3 actions.
@@ -79,5 +83,8 @@ Requirements:
 - Do not include threshold_updates entries where new == old.
 - Rationale must be non-empty; if no change, omit the key.
 - Each how must be a concrete Spark/Delta conf or operation.
-- expected_gain must be measurable.
+- expected_gain must be measurable and use concrete numeric targets derived from metrics/thresholds (e.g., "-20–30% p95 task ms", "avg file ≥ {thresholds.get('small_file_mb')} MB"). Never output placeholders like N, "<value>", or examples verbatim.
+- Keep at most 1 action per issue and only for issues listed in heuristic_issues; remove or merge duplicates.
+- risk_flags must contain potential side effects or risks of the suggested actions (e.g., "Broadcast join may cause OOM", "Compaction may increase temporary storage").
+- If no risks are identified, output a list with something says that there are no risk if you take the suggested actions.
 """
