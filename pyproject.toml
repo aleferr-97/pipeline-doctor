@@ -8,6 +8,9 @@ version = "0.0.1"
 description = "AI-assisted tooling for pipeline diagnostics"
 readme = "README.md"
 requires-python = ">=3.9"
+dependencies = [
+  "requests>=2.31"
+]
 
 [project.optional-dependencies]
 dev = [
