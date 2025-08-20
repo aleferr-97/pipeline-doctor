@@ -4,11 +4,6 @@ ifneq (,$(wildcard .env))
     export $(shell sed 's/=.*//' .env)
 endif
 
-# Defaults (used only if not defined in .env)
-# .env > these defaults
-OLLAMA_MODEL ?= llama3.2:3b
-OLLAMA_HOST ?= http://localhost:11434
-
 .DEFAULT_GOAL := help
 
 .PHONY: install test fmt lint typecheck clean help
