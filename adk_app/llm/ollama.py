@@ -20,21 +20,24 @@ class OllamaLLM(LLM):
         num_ctx: Optional[int] = None,
         top_p: Optional[float] = None,
         repeat_penalty: Optional[float] = None,
+        response_format: Optional[str] = None
     ):
-        self.model = model or os.getenv("OLLAMA_MODEL", "llama3:8b")
-        self.host = (host or os.getenv("OLLAMA_HOST", "http://localhost:11434")).rstrip("/")
-        self.temperature = float(temperature or os.getenv("OLLAMA_TEMPERATURE", 0.2))
-        self.num_predict = int(num_predict or os.getenv("OLLAMA_NUM_PREDICT", 256))
-        self.num_ctx = int(num_ctx or os.getenv("OLLAMA_NUM_CTX", 4096))
-        self.top_p = float(top_p or os.getenv("OLLAMA_TOP_P", 0.9))
-        self.repeat_penalty = float(repeat_penalty or os.getenv("OLLAMA_REPEAT_PENALTY", 1.1))
+        self.model = model
+        self.host = host.rstrip("/")
+        self.temperature = float(temperature)
+        self.num_predict = int(num_predict)
+        self.num_ctx = int(num_ctx)
+        self.top_p = float(top_p)
+        self.repeat_penalty = float(repeat_penalty)
+        self.response_format = response_format
 
     def generate(self, prompt: str, system: Optional[str] = None) -> str:
         headers = {"Content-Type": "application/json"}
         payload = {
             "model": self.model,
-            "prompt": f"{system or ''}\n\n{prompt}",
+            "prompt": prompt,
             "stream": False,
+            "format": self.response_format,
             "options": {
                 "temperature": self.temperature,
                 "num_predict": self.num_predict,
@@ -43,6 +46,10 @@ class OllamaLLM(LLM):
                 "repeat_penalty": self.repeat_penalty,
             },
         }
+        if system:
+            payload["system"] = system
+        if self.response_format:
+            payload["format"] = self.response_format
         url = f"{self.host}/api/generate"
         r = requests.post(url, json=payload, headers=headers)
         r.raise_for_status()
