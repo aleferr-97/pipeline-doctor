@@ -5,9 +5,12 @@ ifneq (,$(wildcard .env))
 endif
 
 .DEFAULT_GOAL := help
+BENCH_MODELS ?= mistral:7b qwen2.5:7b-instruct llama3:8b
+EVENTLOG ?= data/samples/spark_eventlog.jsonl
 
 .PHONY: install test fmt lint typecheck clean help
 .PHONY: up down pull-model wait-ollama agent-sample
+.PHONY: bench
 
 # --- Dockerized Ollama (for local LLM) ---
 up:
@@ -29,6 +32,18 @@ wait-ollama:
 	  sleep 1; \
 	done; \
 	echo "Ollama not responding on $(OLLAMA_HOST)"; exit 1
+
+# --- Benchmarks ---
+
+bench: up wait-ollama
+	@mkdir -p eval/runs
+	@echo "Benchmarking models: $(BENCH_MODELS)"
+	@for m in $(BENCH_MODELS); do \
+	  echo "=== $$m ==="; \
+	  OLLAMA_MODEL=$$m $(MAKE) --no-print-directory pull-model; \
+	  OLLAMA_MODEL=$$m python ui/agent_cli.py --eventlog $(EVENTLOG) --json >/dev/null || exit 1; \
+	done
+	@echo "Done. Check eval/runs/*-<model>.json (each file has meta.duration_s)."
 
 # --- Project tasks ---
 install:
