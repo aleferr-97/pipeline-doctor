@@ -80,4 +80,5 @@ Requirements:
 - Each how must be one of: {ALLOWED_ACTIONS} (numeric values must be explicit, e.g. spark.sql.shuffle.partitions=400). Reject generic or incomplete keys.
 - Keep **exactly one action per issue**; if multiple actions address the same issue (e.g., AQE and skewJoin for skew), keep the most impactful single action and remove the others.
 - Ensure `expected_gain` is numeric and comparative (current → target with units) using the provided metrics/thresholds; do not accept placeholders or template text.
+- Do not output characters separated by punctuation or spaces; configuration keys must appear as intact strings (e.g., ‘spark.sql.adaptive.enabled=true’).
 """

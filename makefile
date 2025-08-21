@@ -6,11 +6,18 @@ endif
 
 .DEFAULT_GOAL := help
 BENCH_MODELS ?= mistral:7b qwen2.5:7b-instruct llama3:8b
+
+# Parameter sets for decoding (temperature, top_p, repeat_penalty)
+BENCH_PARAM_MATRIX ?= \
+  "0.2 0.8 1.1" \
+  "0.5 0.9 1.1" \
+  "0.8 0.95 1.0"
+
 EVENTLOG ?= data/samples/spark_eventlog.jsonl
 
 .PHONY: install test fmt lint typecheck clean help
 .PHONY: up down pull-model wait-ollama agent-sample
-.PHONY: bench
+.PHONY: bench bench-grid
 
 # --- Dockerized Ollama (for local LLM) ---
 up:
@@ -45,6 +52,21 @@ bench: up wait-ollama
 	done
 	@echo "Done. Check eval/runs/*-<model>.json (each file has meta.duration_s)."
 
+bench-grid: up wait-ollama
+	@mkdir -p eval/runs
+	@echo "Benchmarking grid over models: $(BENCH_MODELS)"
+	@for m in $(BENCH_MODELS); do \
+	  echo "=== MODEL $$m ==="; \
+	  $(MAKE) --no-print-directory OLLAMA_MODEL=$$m pull-model; \
+	  for p in $(BENCH_PARAM_MATRIX); do \
+	    set -- $$p; T=$$1; P=$$2; RP=$$3; \
+	    echo ">>> $$m | temperature=$$T top_p=$$P repeat_penalty=$$RP"; \
+	    OLLAMA_MODEL=$$m OLLAMA_TEMPERATURE=$$T OLLAMA_TOP_P=$$P OLLAMA_REPEAT_PENALTY=$$RP \
+	      python ui/agent_cli.py --eventlog $(EVENTLOG) --json >/dev/null || exit 1; \
+	  done; \
+	done
+	@echo "Done. Check eval/runs/ for per-run JSON outputs."
+
 # --- Project tasks ---
 install:
 	pip install -e ".[dev]"
@@ -73,6 +95,8 @@ help:
 	@echo "Available commands:"
 	@echo "  make up            - Start Ollama (Docker)"
 	@echo "  make wait-ollama   - Wait until Ollama API is ready"
+	@echo "  make bench         - Benchmark each model once (uses BENCH_MODELS)"
+	@echo "  make bench-grid    - Benchmark each model across parameter sets (temperature, top_p, repeat_penalty)"
 	@echo "  make pull-model    - Pull Ollama model (OLLAMA_MODEL=$(OLLAMA_MODEL))"
 	@echo "  make agent-sample  - Start stack, pull model, and run CLI on the sample eventlog"
 	@echo "  make down          - Stop Docker stack"
