@@ -1,9 +1,11 @@
-from typing import Dict, Optional, Any, Tuple
-import json
 import logging
+from typing import Dict, Optional
 
-from adk_app.tools.summarize_metrics import summarize_metrics
-from adk_app.tools.suggest_fixes import suggest_fixes
+from adk_app.helpers import (
+    format_report_from_agent_json,
+    clean_threshold_updates,
+    llm_to_json
+)
 from adk_app.llm.base import LLM, NoopLLM
 from adk_app.prompts import (
     DRAFT_SYSTEM,
@@ -11,12 +13,8 @@ from adk_app.prompts import (
     build_draft_prompt,
     build_refine_prompt,
 )
-from adk_app.helpers import (
-    format_report_from_agent_json,
-    try_load_json,
-    clean_threshold_updates,
-    llm_to_json
-)
+from adk_app.tools.suggest_fixes import suggest_fixes
+from adk_app.tools.summarize_metrics import summarize_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +66,8 @@ def analyze_eventlog_with_agent(
             "recommendations": recs,
             "report": draft_raw,
             "agent": None,
+            "draft_raw": draft_raw,
+            "refined_raw": "",
         }
 
     # Refine
@@ -76,6 +76,13 @@ def analyze_eventlog_with_agent(
     logger.debug(f"Refined parsed: {refined_obj is not None}")
 
     agent_structured = refined_obj or draft_obj
+
+    # Guard: some models may return a top-level list (e.g., list of lines or actions).
+    # Normalize to a dict schema so downstream utils never crash.
+    if isinstance(agent_structured, list):
+        logger.debug("Normalizing LLM output: wrapping top-level list under 'action_plan'.")
+        agent_structured = {"action_plan": agent_structured}
+
     clean_threshold_updates(agent_structured)
     formatted_report = format_report_from_agent_json(agent_structured)
 
@@ -84,4 +91,6 @@ def analyze_eventlog_with_agent(
         "recommendations": recs,
         "report": formatted_report,
         "agent": agent_structured,
+        "draft_raw": draft_obj,
+        "refined_raw": refined_obj,
     }
