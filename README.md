@@ -1,70 +1,119 @@
 # Pipeline Doctor
 
-MVP project: an AI-assisted tool (agent-ready) that inspects pipeline runs
-(starting with Apache Spark) to detect bottlenecks and propose actionable fixes.
+Pipeline Doctor is an AI-assisted tool designed to analyze Apache Spark pipeline runs, identify performance bottlenecks, and suggest actionable improvements. It helps optimize Spark jobs by providing clear diagnostics and recommendations.
 
-## Setup
+## Requirements
 
-Create a `.env` file in the project root to configure environment variables required for the application.
+- Python 3.10 or higher  
+- Docker  
+- Ollama (local LLM server)
 
-Example `.env` file:
+## Quick Start
+
+Run the following commands to get started quickly:
+
+```bash
+make up
+make wait-ollama
+make pull-model
+make agent-sample
 ```
-OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
-```
 
-## 💡 RAG (local knowledge)
+## Local RAG (Retrieval-Augmented Generation)
 
-This repo now supports a **minimal RAG** flow (no external services). Put your internal notes,
-Spark/Delta best practices, and runbooks into:
+Pipeline Doctor supports a minimal local RAG workflow to enhance LLM prompts with internal knowledge. Place your documentation and best practices in the `docs/knowledge/` directory:
 
 ```
 docs/knowledge/
   ├─ spark_aqe.md
   ├─ delta_compaction.md
-  └─ troubleshooting.txt
 ```
 
-The agent will:
-1) build a short query from current metrics/issues,
-2) retrieve top‑K snippets from those files,
-3) inject them into the LLM prompt as background knowledge.
+Example snippet contents:
 
-> No extra dependencies. Retrieval is a tiny token‑overlap ranker; feel free to replace it later with BM25/FAISS.
+- **spark_aqe.md**  
+  - Adaptive Query Execution improves performance by dynamically optimizing query plans.  
+  - Enable AQE via `spark.sql.adaptive.enabled=true`.
 
-Logs will show how many snippets were injected: `RAG: injected N snippet(s) into prompt`
+- **delta_compaction.md**  
+  - Delta Lake compaction reduces small files to improve read efficiency.  
+  - Use `OPTIMIZE` commands and configure compaction thresholds.
 
-## Roadmap
+The agent extracts relevant snippets from these files based on the current Spark metrics and injects them into the prompt to provide context-aware recommendations.
 
-**Sprint 1 — Solidify MVP (done ✅)**  
-- Structured agent output (`--json` flag, results saved in `eval/runs/`).  
-- Threshold profiles (`profiles/<appName>.yaml`, auto-loaded on reruns).  
-- Heuristics cleanup (all-English, consistent threshold naming, stable issue IDs).  
+## Benchmarking
 
-**Sprint 2 — Model benchmarking (in progress 🚀)**  
-- Parametric pytest comparing multiple models (`llama3:8b`, `mistral:7b`, `qwen2.5`, `codellama`, …).  
-- Evaluate: response time, JSON validity, completeness, stability.  
-- Save results in `eval/model_runs/`.  
-- Document results in README with a comparison table (pros/cons).  
+Use the following commands to benchmark models and evaluate performance:
 
-**Sprint 3 — Auto-ingest Spark conf (planned)**  
-- Extract Spark properties from event log (`SparkListenerEnvironmentUpdate`).  
-- Optionally fetch Spark conf from Spark History Server (`/api/v1/applications/<id>/environment`).  
+- `make bench` — runs benchmarks on selected models and saves results.  
+- `make bench-grid` — runs a grid of model and parameter combinations for detailed comparison.
 
-**Sprint 4 — Service mode (planned)**  
-- FastAPI endpoints:  
-  - `POST /analyze-eventlog`  
-  - `POST /analyze-shs?appId=...`  
-  - `POST /events` (real-time from SparkListener).  
-- Integrations: filesystem/object storage watcher, SparkListener → HTTP, optional Kafka sink.  
+Benchmark results, including latency and output quality metrics, are stored in the `eval/model_runs/` directory. You can inspect `meta.duration_s` in the JSON output to analyze inference times.
 
-**Sprint 5 — Reliability & UX (planned)**  
-- LLM caching and rate-limiting.  
-- Configurable timeout/retry via `.env`.  
-- Prompt guardrails: always inject `spark_conf` + reference actions.  
-- Integration tests (skip if no Ollama running).  
+## LLM Tuning
 
-**Sprint 6 — Advanced heuristics (future)**  
-- New rules: long GC time, executor kill rate, missing ZORDER, oversized broadcast joins, shuffle spill ratio.  
-- Explainability: include key evidence per issue (numbers, metrics).  
-- Config suggestions mapped to each heuristic. 
+You can customize the LLM behavior using environment variables:
+
+| Variable              | Description                       | Default |
+|-----------------------|---------------------------------|---------|
+| `OLLAMA_TEMPERATURE`  | Sampling temperature             | 0.2     |
+| `OLLAMA_TOP_P`        | Nucleus sampling probability     | 0.9     |
+| `OLLAMA_REPEAT_PENALTY` | Repetition penalty             | 1.1     |
+| `OLLAMA_NUM_PREDICT`  | Max tokens to predict            | 768     |
+| `OLLAMA_NUM_CTX`      | Context window size              | 4096    |
+| `OLLAMA_FORMAT`       | Output format (e.g., `json`)     | `json`  |
+
+Set these variables in your `.env` file or shell environment to tune model responses.
+
+## Sample Inputs
+
+Sample Spark event log inputs are available under `data/samples/`:
+
+- `skew.jsonl` — workloads with data skew issues  
+- `small_files.jsonl` — jobs suffering from small file problems  
+- `shuffle_heavy.jsonl` — shuffle-intensive workloads
+
+Use these for testing and development.
+
+## Sample Output
+
+Example JSON output from the agent:
+
+```json
+{
+  "metrics": {
+    "duration_s": 120,
+    "shuffle_read_gb": 15.3,
+    "gc_time_s": 5.2
+  },
+  "issues": [
+    {
+      "id": "small_files_01",
+      "description": "Detected excessive small files causing overhead.",
+      "severity": "medium"
+    }
+  ],
+  "draft_raw": "The job has many small files affecting performance. Consider compaction.",
+  "refined_raw": "Small files detected; recommend running Delta Lake OPTIMIZE to improve read efficiency.",
+  "rag": {
+    "snippets": [
+      "Delta Lake compaction reduces small files to improve read efficiency.",
+      "Use OPTIMIZE commands and configure compaction thresholds."
+    ]
+  }
+}
+```
+
+## Logging
+
+To enable detailed logging, run the agent CLI with:
+
+```bash
+LOG_LEVEL=DEBUG python ui/agent_cli.py ...
+```
+
+Optionally, suppress Python warnings by adding:
+
+```bash
+PYTHONWARNINGS=ignore
+```
