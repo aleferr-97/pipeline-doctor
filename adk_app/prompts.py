@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # --- System messages ---
 DRAFT_SYSTEM = (
@@ -13,17 +13,26 @@ REFINE_SYSTEM = (
     "Ensure the JSON matches the requested schema and is compact and consistent."
 )
 
+ALLOWED_ACTIONS = [
+  "spark.sql.adaptive.enabled=true",
+  "spark.sql.adaptive.skewJoin.enabled=true",
+  "spark.sql.shuffle.partitions=<N>",
+  "Delta OPTIMIZE",
+  "coalesce before writing",
+]
+
 # --- Prompt builders ---
-def build_draft_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict) -> str:
+def build_draft_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, rag_context: Optional[str] = None) -> str:
     ref_actions = {r["issue"]: r.get("actions", []) for r in recs if r.get("actions")}
     issues_only = [{k: v for k, v in r.items() if k != "actions"} for r in recs]
-
+    knowledge = f"\nKnowledge (retrieved snippets; may be incomplete):\n{rag_context}\n" if rag_context else ""
     return f"""
 Context:
 - metrics: {metrics}
 - heuristic_issues: {issues_only}
 - reference_actions: {ref_actions}
 - thresholds: {thresholds}
+- {knowledge}
 
 Constraints:
 - No preamble, no headings.
@@ -32,38 +41,20 @@ Constraints:
 - Use only supported Spark/Delta features.
 
 Additional rules:
-- Do not include threshold_updates entries where new == old.
-- Rationale must be non-empty; if no change, omit the key.
-- Each how must be a concrete Spark/Delta conf or operation (e.g., exact spark.sql.* key or Delta command).
-- expected_gain must be measurable and use concrete numeric targets derived from metrics/thresholds (e.g., "-20–30% p95 task ms", "avg file ≥ {thresholds.get('small_file_mb')} MB"). Never output placeholders like N, "<value>", or examples verbatim.
-- risk_flags must contain potential side effects or risks of the suggested actions (e.g., "Broadcast join may cause OOM", "Compaction may increase temporary storage").
-- If no risks are identified, output a list with something says that there are no risk if you take the suggested actions.
-- Limit to at most 1 action per issue present in heuristic_issues; do not invent actions for issues that are not listed.
-
-Return STRICT JSON that matches this schema exactly:
-{{
-  "action_plan": [
-    {{"title": "string", "why": "string", "how": ["string", "..."], "expected_gain": "string"}}
-  ],
-  "threshold_updates": {{
-    "skew_threshold": {{"old": {thresholds.get('skew_threshold')}, "new": 5.0, "rationale": "string"}},
-    "small_file_mb": {{"old": {thresholds.get('small_file_mb')}, "new": 32.0, "rationale": "string"}},
-    "shuffle_heavy_mb": {{"old": {thresholds.get('shuffle_heavy_mb')}, "new": 2048.0, "rationale": "string"}},
-    "files_per_partition_threshold": {{"old": {thresholds.get('files_per_partition_threshold')}, "new": 2.0, "rationale": "string"}}
-  }},
-  "safe_experiment": {{
-    "steps": ["string", "..."],
-    "guardrails": ["string", "..."],
-    "success_criteria": "string"
-  }},
-  "risk_flags": ["string", "..."]
-}}
-
-Do not add any extra keys. Output JSON only.
+- Do not include threshold_updates entries where new == old (and omit the key entirely if there are no changes). If a change is proposed, include a non-empty rationale.
+- For each issue in heuristic_issues, pick **exactly one** action (no duplicates). For data skew choose **one** among: `spark.sql.adaptive.enabled=true`, `spark.sql.adaptive.skewJoin.enabled=true`, or salting/repartition (not both AQE and skewJoin).
+- Each `how` must be a concrete Spark/Delta setting or operation (exact key/value or command). **Never** output placeholders like `N`, `<value>`, or examples verbatim.
+- `expected_gain` must be **numeric and derived from the input metrics/thresholds**, and must explicitly show both current and target values with units, e.g. `"p95: 13620 ms → 9500 ms (~-30%)"`, `"avg file size: 6.27 MB → ≥ 32 MB"`.
+- When estimating targets, use simple proportional reasoning based on the metrics provided:
+  - If `is_skew_suspect` is true and `p95_task_ms` is present, assume skew mitigation can reduce p95 by **20%–35%**. Pick a concrete target in that range and round to integers.
+  - If `is_small_files_problem` is true and `avg_file_mb` < `small_file_mb`, set target `avg file size` to **≥ small_file_mb** (use the threshold value).
+- Risk flags must be grounded in the chosen action (e.g. for broadcast joins mention OOM risk; for compaction mention temporary storage growth). If no risks are identified, return `["no material risks identified for the proposed actions"]`.
+- Each `how` must be one of: {ALLOWED_ACTIONS} (numeric values must be explicit, e.g. `spark.sql.shuffle.partitions=400`). Reject generic or incomplete keys.
+- Output **STRICT JSON** only; no prose, no markdown, no headings.
 """
 
 
-def build_refine_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, draft: Dict) -> str:
+def build_refine_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, draft: Dict, rag_context: Optional[str] = None) -> str:
     return f"""
 You are refining an assistant's draft JSON. Make it concise, valid to the schema, with at most 3 actions.
 
@@ -71,6 +62,7 @@ Context:
 - metrics: {metrics}
 - heuristic_issues: {[{k: v for k, v in r.items() if k != "actions"} for r in recs]}
 - thresholds: {thresholds}
+{f"\nKnowledge (retrieved snippets; may be incomplete):\n{rag_context}\n" if rag_context else ""}
 
 Draft to refine (JSON):
 {json.dumps(draft, ensure_ascii=False)}
@@ -87,4 +79,8 @@ Requirements:
 - Keep at most 1 action per issue and only for issues listed in heuristic_issues; remove or merge duplicates.
 - risk_flags must contain potential side effects or risks of the suggested actions (e.g., "Broadcast join may cause OOM", "Compaction may increase temporary storage").
 - If no risks are identified, output a list with something says that there are no risk if you take the suggested actions.
+- Each how must be one of: {ALLOWED_ACTIONS} (numeric values must be explicit, e.g. spark.sql.shuffle.partitions=400). Reject generic or incomplete keys.
+- Keep **exactly one action per issue**; if multiple actions address the same issue (e.g., AQE and skewJoin for skew), keep the most impactful single action and remove the others.
+- Ensure `expected_gain` is numeric and comparative (current → target with units) using the provided metrics/thresholds; do not accept placeholders or template text.
+- Do not output characters separated by punctuation or spaces; configuration keys must appear as intact strings (e.g., ‘spark.sql.adaptive.enabled=true’).
 """
