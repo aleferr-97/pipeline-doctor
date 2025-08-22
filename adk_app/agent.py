@@ -15,6 +15,7 @@ from adk_app.prompts import (
 )
 from adk_app.tools.suggest_fixes import suggest_fixes
 from adk_app.tools.summarize_metrics import summarize_metrics
+from adk_app.rag.retriever import retrieve_snippets, build_query_from_metrics_and_issues
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ def analyze_eventlog_with_agent(
     small_file_mb: float = 32.0,
     shuffle_heavy_mb: float = 2048.0,
     files_per_partition_threshold: float = 2.0,
+    use_heuristics: bool = False,
 ) -> Dict:
     """Analyze an eventlog with heuristics + LLM (draft→refine)."""
     # 1) Perceive
@@ -35,14 +37,20 @@ def analyze_eventlog_with_agent(
     logger.debug(f"Summarized metrics: {metrics}")
 
     # 2) Draft with tools
-    recs = suggest_fixes(
-        metrics,
-        skew_threshold=skew_threshold,
-        small_file_mb=small_file_mb,
-        shuffle_heavy_mb=shuffle_heavy_mb,
-        files_per_partition_threshold=files_per_partition_threshold,
-    )
-    logger.debug(f"Generated recommendations: {recs}")
+    # Heuristics can be toggled off via param or env USE_HEURISTICS
+    recs = []
+    if use_heuristics:
+        recs = suggest_fixes(
+            metrics,
+            skew_threshold=skew_threshold,
+            small_file_mb=small_file_mb,
+            shuffle_heavy_mb=shuffle_heavy_mb,
+            files_per_partition_threshold=files_per_partition_threshold,
+        )
+        logger.debug(f"Generated heuristic recommendations: {recs}")
+    else:
+        recs = []
+    logger.info("Skipping heuristic recommendations (use_heuristics=False)")
 
     # 3) Reason (LLM)
     llm = llm or NoopLLM()
@@ -54,7 +62,12 @@ def analyze_eventlog_with_agent(
     }
 
     # Draft
-    draft_prompt = build_draft_prompt(metrics, recs, thresholds)
+    rag_query = build_query_from_metrics_and_issues(metrics, recs)
+    rag_snippets = retrieve_snippets(rag_query, k=5)
+    rag_context = "\n".join([f"- [{s['source']}] {s['text']}" for s in rag_snippets]) if rag_snippets else ""
+    logger.info("RAG: injected %d snippet(s) into prompt", len(rag_snippets))
+
+    draft_prompt = build_draft_prompt(metrics, recs, thresholds, rag_context=rag_context)
     draft_obj, draft_raw = llm_to_json(llm, DRAFT_SYSTEM, draft_prompt)
     logger.debug(f"Draft parsed: {draft_obj is not None}")
 

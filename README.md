@@ -13,12 +13,26 @@ OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=llama3.2:3b
 ```
 
-## Models
+## 💡 RAG (local knowledge)
 
-- `llama3.2:3b`: A smaller model suitable for local development and testing due to its lower resource requirements.
-- `llama3:8b`: A larger, more powerful model recommended for cloud deployments or environments with sufficient computational resources.
+This repo now supports a **minimal RAG** flow (no external services). Put your internal notes,
+Spark/Delta best practices, and runbooks into:
 
-Choose the model based on your deployment environment and performance needs.
+```
+docs/knowledge/
+  ├─ spark_aqe.md
+  ├─ delta_compaction.md
+  └─ troubleshooting.txt
+```
+
+The agent will:
+1) build a short query from current metrics/issues,
+2) retrieve top‑K snippets from those files,
+3) inject them into the LLM prompt as background knowledge.
+
+> No extra dependencies. Retrieval is a tiny token‑overlap ranker; feel free to replace it later with BM25/FAISS.
+
+Logs will show how many snippets were injected: `RAG: injected N snippet(s) into prompt`
 
 ## Roadmap
 
@@ -53,4 +67,4 @@ Choose the model based on your deployment environment and performance needs.
 **Sprint 6 — Advanced heuristics (future)**  
 - New rules: long GC time, executor kill rate, missing ZORDER, oversized broadcast joins, shuffle spill ratio.  
 - Explainability: include key evidence per issue (numbers, metrics).  
-- Config suggestions mapped to each heuristic.  
+- Config suggestions mapped to each heuristic. 

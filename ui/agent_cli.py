@@ -49,6 +49,7 @@ def main():
     p.add_argument("--shuffle-heavy-mb", type=float, default=2048.0)
     p.add_argument("--files-per-part-th", type=float, default=2.0)
     p.add_argument("--json", action="store_true", help="Print structured JSON output instead of human-readable text")
+    p.add_argument("--use-heuristics", action="store_true", help="Enable rule-based heuristics in addition to LLM")
     args = p.parse_args()
 
     # Load .env if present so running the CLI directly behaves like `make` targets
@@ -100,12 +101,13 @@ def main():
             repeat_penalty=repeat_penalty,
             num_predict=num_predict,
             num_ctx=num_ctx,
-            response_format=response_format,
+            response_format=response_format
         ),
         skew_threshold=args.skew_th,
         small_file_mb=args.small_file_mb,
         shuffle_heavy_mb=args.shuffle_heavy_mb,
         files_per_partition_threshold=args.files_per_part_th,
+        use_heuristics=args.use_heuristics
     )
     duration_s = round(perf_counter() - t0, 3)
 

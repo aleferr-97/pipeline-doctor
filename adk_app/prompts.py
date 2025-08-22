@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 # --- System messages ---
 DRAFT_SYSTEM = (
@@ -22,16 +22,17 @@ ALLOWED_ACTIONS = [
 ]
 
 # --- Prompt builders ---
-def build_draft_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict) -> str:
+def build_draft_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, rag_context: Optional[str] = None) -> str:
     ref_actions = {r["issue"]: r.get("actions", []) for r in recs if r.get("actions")}
     issues_only = [{k: v for k, v in r.items() if k != "actions"} for r in recs]
-
+    knowledge = f"\nKnowledge (retrieved snippets; may be incomplete):\n{rag_context}\n" if rag_context else ""
     return f"""
 Context:
 - metrics: {metrics}
 - heuristic_issues: {issues_only}
 - reference_actions: {ref_actions}
 - thresholds: {thresholds}
+- {knowledge}
 
 Constraints:
 - No preamble, no headings.
@@ -53,7 +54,7 @@ Additional rules:
 """
 
 
-def build_refine_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, draft: Dict) -> str:
+def build_refine_prompt(metrics: Dict, recs: List[Dict], thresholds: Dict, draft: Dict, rag_context: Optional[str] = None) -> str:
     return f"""
 You are refining an assistant's draft JSON. Make it concise, valid to the schema, with at most 3 actions.
 
@@ -61,6 +62,7 @@ Context:
 - metrics: {metrics}
 - heuristic_issues: {[{k: v for k, v in r.items() if k != "actions"} for r in recs]}
 - thresholds: {thresholds}
+{f"\nKnowledge (retrieved snippets; may be incomplete):\n{rag_context}\n" if rag_context else ""}
 
 Draft to refine (JSON):
 {json.dumps(draft, ensure_ascii=False)}
