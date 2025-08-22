@@ -1,0 +1,13 @@
+{"type":"task","duration_ms":1800,"shuffleRead_mb":400.0,"stage_id":1}
+{"type":"task","duration_ms":1700,"shuffleRead_mb":420.0,"stage_id":1}
+{"type":"task","duration_ms":2000,"shuffleRead_mb":390.0,"stage_id":1}
+{"type":"task","duration_ms":9200,"shuffleRead_mb":850.0,"stage_id":2}
+{"type":"task","duration_ms":8000,"shuffleRead_mb":870.0,"stage_id":2}
+{"type":"task","duration_ms":8600,"shuffleRead_mb":820.0,"stage_id":2}
+{"type":"task","duration_ms":9100,"shuffleRead_mb":830.0,"stage_id":2}
+{"type":"task","duration_ms":8900,"shuffleRead_mb":840.0,"stage_id":2}
+{"type":"task","duration_ms":8800,"shuffleRead_mb":860.0,"stage_id":2}
+{"type":"output_file","partition_id":0,"size_mb":64.0}
+{"type":"output_file","partition_id":1,"size_mb":70.0}
+{"type":"output_file","partition_id":2,"size_mb":60.0}
+{"type":"output_file","partition_id":3,"size_mb":62.0}
