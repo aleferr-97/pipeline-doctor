@@ -85,7 +85,7 @@ typecheck:
 
 agent-sample: up wait-ollama pull-model
 	@echo "Running agent with OLLAMA_HOST=$(OLLAMA_HOST) OLLAMA_MODEL=$(OLLAMA_MODEL)"
-	python ui/agent_cli.py --eventlog data/samples/spark_eventlog.jsonl
+	python ui/agent_cli.py --eventlog $(EVENTLOG)
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +
